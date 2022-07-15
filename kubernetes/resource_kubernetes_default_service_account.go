@@ -26,6 +26,13 @@ func resourceKubernetesDefaultServiceAccount() *schema.Resource {
 
 	serviceAccountResource.Schema["metadata"] = metaSchema
 
+	serviceAccountResource.Schema["have_default_secret"] = &schema.Schema{
+		Type:        schema.TypeBool,
+		Description: "Does default serivce acccount have a default secret",
+		Optional:    true,
+		Default:     true,
+	}
+
 	serviceAccountResource.CreateContext = resourceKubernetesDefaultServiceAccountCreate
 
 	return serviceAccountResource
@@ -60,11 +67,15 @@ func resourceKubernetesDefaultServiceAccountCreate(ctx context.Context, d *schem
 		return diag.FromErr(err)
 	}
 
-	secret, err := getServiceAccountDefaultSecret(ctx, "default", svcAcc, d.Timeout(schema.TimeoutCreate), conn)
-	if err != nil {
-		return diag.FromErr(err)
+	secretName := ""
+	if d.Get("have_default_secret").(bool) {
+		secret, err := getServiceAccountDefaultSecret(ctx, "default", svcAcc, d.Timeout(schema.TimeoutCreate), conn)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		secretName = secret.Name
 	}
-	d.Set("default_secret_name", secret.Name)
+	d.Set("default_secret_name", secretName)
 
 	ops := patchMetadata("metadata.0.", "/metadata/", d)
 	if d.HasChange("image_pull_secret") {
@@ -74,11 +85,11 @@ func resourceKubernetesDefaultServiceAccountCreate(ctx context.Context, d *schem
 			Value: expandLocalObjectReferenceArray(v),
 		})
 	}
-	if d.HasChange("secret") {
+	if d.HasChange("secret") && d.Get("have_default_secret").(bool) {
 		v := d.Get("secret").(*schema.Set).List()
 		ops = append(ops, &ReplaceOperation{
 			Path:  "/secrets",
-			Value: expandServiceAccountSecrets(v, secret.Name),
+			Value: expandServiceAccountSecrets(v, secretName),
 		})
 	}
 
