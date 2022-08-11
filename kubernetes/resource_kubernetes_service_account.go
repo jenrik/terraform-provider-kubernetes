@@ -72,6 +72,12 @@ func resourceKubernetesServiceAccount() *schema.Resource {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
+			"have_default_secret": {
+				Type:        schema.TypeBool,
+				Description: "Does the service acccount have a default secret",
+				Optional:    true,
+				Default:     true,
+			},
 		},
 	}
 }
@@ -97,12 +103,16 @@ func resourceKubernetesServiceAccountCreate(ctx context.Context, d *schema.Resou
 	log.Printf("[INFO] Submitted new service account: %#v", out)
 	d.SetId(buildId(out.ObjectMeta))
 
-	secret, err := getServiceAccountDefaultSecret(ctx, out.Name, svcAcc, d.Timeout(schema.TimeoutCreate), conn)
-	if err != nil {
-		return diag.FromErr(err)
+	secretName := ""
+	if d.Get("have_default_secret").(bool) {
+		secret, err := getServiceAccountDefaultSecret(ctx, out.Name, svcAcc, d.Timeout(schema.TimeoutCreate), conn)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		secretName = secret.Name
 	}
 
-	err = d.Set("default_secret_name", secret.Name)
+	err = d.Set("default_secret_name", secretName)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -316,7 +326,10 @@ func resourceKubernetesServiceAccountUpdate(ctx context.Context, d *schema.Resou
 	}
 	if d.HasChange("secret") {
 		v := d.Get("secret").(*schema.Set).List()
-		defaultSecretName := d.Get("default_secret_name").(string)
+		defaultSecretName := ""
+		if d.Get("have_default_secret").(bool) {
+			defaultSecretName = d.Get("default_secret_name").(string)
+		}
 
 		ops = append(ops, &ReplaceOperation{
 			Path:  "/secrets",

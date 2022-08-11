@@ -26,13 +26,6 @@ func resourceKubernetesDefaultServiceAccount() *schema.Resource {
 
 	serviceAccountResource.Schema["metadata"] = metaSchema
 
-	serviceAccountResource.Schema["have_default_secret"] = &schema.Schema{
-		Type:        schema.TypeBool,
-		Description: "Does default serivce acccount have a default secret",
-		Optional:    true,
-		Default:     true,
-	}
-
 	serviceAccountResource.CreateContext = resourceKubernetesDefaultServiceAccountCreate
 
 	return serviceAccountResource
